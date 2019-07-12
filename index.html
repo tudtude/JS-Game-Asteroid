@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Asteroids</title>
+    <style>
+        body {
+            text-align: center
+        }
+        #display {
+            border: 1px solid;
+            width: 80vh;
+        }
+    </style>  
+</head>
+<body>
+    <canvas id='display' display width="500" height="500"></canvas>
+<!--<script src="main.js"></script>-->
+</body>
+</html>
+<script>
+
+    let display, displayContext, gameStart, laser, message, score, ship
+    
+    let shipHeight = 50
+    let devMode = false
+    let gameStatus = 'running'
+    let pi = Math.PI
+    let sin = Math.sin
+    let cos = Math.cos    
+    let friction = 0.01 
+    let frames = 0
+    let level = 1
+    let lives = 3
+    let messageFont = '20px Verdana'
+    
+    display = document.getElementById('display')
+    displayContext = display.getContext('2d')
+
+    
+    ship = createShip()
+    laser = {
+        velocity : 5,
+        limit: 7,
+        body: [],
+        explodeTime: 5
+    }
+    
+    asteroid = {
+        number: 1,
+        r: 40,
+        velocity: .1,
+        body: [],
+        show: asteroidShow,
+        create: createAsteroid,
+        update: asteroidUpdate,
+    }
+    
+    function newLevel(){
+        message = 'Level : ' + level
+        messageAlpha = 1
+        if( level != 1 ){
+            createAsteroid()   
+        }
+    }
+    
+    function newGame(){
+        if( lives == 0 ){
+            lives = 3
+            
+        }
+        gameStatus = 'running'
+        level = 1
+        asteroid.body = []
+        asteroid.number = 1
+        score = 0
+        createAsteroid()
+        ship = createShip()
+        newLevel()
+    }
+    
+    newGame()
+    gameLoop()
+    
+    function gameLoop(){
+        frames ++
+        backGroundShow() 
+        if( gameStatus == 'running' ){
+            ship.show()
+            ship.update()
+        }
+        laserShow()
+        laserUpdate()
+        asteroid.show()
+        asteroid.update()
+        messageShow()
+        livesShow()
+        scoreShow()
+        gameStart = requestAnimationFrame( gameLoop )
+    }
+    
+    function backGroundShow(){
+        displayContext.fillStyle = "black"
+        displayContext.fillRect( 0, 0, display.width, display.height )
+    }
+    
+    function shipShow(){
+        if( !ship.blinkOn && ship.blinkTime > 0 ){
+            return 
+        }
+        let a = ship.a
+        let x = ship.x
+        let y = ship.y
+        let r = ship.r
+        
+        if( devMode ){
+            displayContext.beginPath()
+            displayContext.strokeStyle = 'green'
+            displayContext.arc( x, y, r, 0, 2*pi)
+            displayContext.stroke()
+            displayContext.beginPath()
+            displayContext.arc( ship.x, ship.y, 2, 0, 2*Math.PI)
+            displayContext.stroke()
+        }
+        displayContext.strokeStyle = 'white'
+        displayContext.beginPath()
+        displayContext.moveTo(
+            x + r * cos(a),
+            y - r * sin(a)
+        )
+        displayContext.lineTo(
+            x - r * 0.6 * ( cos(a) + sin(a)),
+            y + r * 0.6 * ( sin(a) - cos(a))
+        )
+        displayContext.lineTo(
+            x + r * 0.6 * ( sin(a) - cos(a)),
+            y + r * 0.6 * ( sin(a) + cos(a))
+        )
+        displayContext.closePath()
+        displayContext.stroke()
+    }
+    
+    function createShip(){
+        return {
+            x: display.width /2,
+            y: display.height /2,
+            r: shipHeight/2,
+            a: Math.PI/2,
+            rotateVelocity: 0,
+            velocityX: 0,
+            velocityY: 0,
+            blinkTime: 180,
+            blinkOn: true,
+            move: false,
+            thrust: false,
+            rotateLeft: false,
+            rotateRight: false,
+            show: shipShow,
+            update: shipUpdate
+        }
+    }
+    
+    function shipUpdate(){
+        
+        ship.blinkTime -= 1
+        if( frames % 10 == 0 ){
+            ship.blinkOn = ship.blinkOn == true ? false : true
+        }
+        
+        if( ship.rotateLeft ){
+            ship.rotateVelocity += 0.003
+            showRightThrust()
+        }
+        if( ship.rotateRight){
+            ship.rotateVelocity -= 0.003
+            showLeftThrust()
+        }
+        if( ship.thrust ){
+            ship.velocityX += cos( ship.a ) / 50
+            ship.velocityY -= sin( ship.a ) / 50
+            showThrust()
+        }
+        
+        ship.rotateVelocity -= ship.rotateVelocity * friction * 3
+        ship.velocityX -= ship.velocityX * friction 
+        ship.velocityY -= ship.velocityY * friction  
+        ship.a += ship.rotateVelocity
+        ship.x += ship.velocityX 
+        ship.y += ship.velocityY
+        
+    
+        // border impact
+        if( ship.x - ship.r > display.width ){
+            ship.x = 0 - ship.r
+        }
+        
+        if( ship.x + ship.r < 0 ){
+            ship.x = display.width + ship.r
+        }
+        
+        if( ship.y + ship.r < 0 ){
+            ship.y = display.height + ship.r
+        }
+        
+        if( ship.y - ship.r > display.height ){
+            ship.y = 0 - ship.r 
+        }
+    }
+    
+    function showThrust(){
+        
+        let a = ship.a
+        let x = ship.x
+        let y = ship.y
+        let r = ship.r
+        
+        displayContext.fillStyle = 'red'
+        displayContext.beginPath()
+        displayContext.moveTo(
+            x - r * .6 * ( cos(a) + .7 *sin(a)),
+            y + r * .6 * ( sin(a) - .7 *cos(a))
+        )
+        displayContext.lineTo(
+            x - r * cos( a ),
+            y + r * sin( a )
+        )
+        
+        displayContext.lineTo(
+            x + r * 0.6 * ( .7 * sin(a) - cos(a)),
+            y + r * 0.6 * ( sin(a) + .7 * cos(a))
+        )
+        displayContext.fill()
+        
+        displayContext.fillStyle = 'yellow'
+        displayContext.beginPath()
+        displayContext.moveTo(
+            x - r * .6 * ( cos(a) + .4 *sin(a)),
+            y + r * .6 * ( sin(a) - .4 *cos(a))
+        )
+        displayContext.lineTo(
+            x - r * .9 * cos( a ),
+            y + r * .9 * sin( a )
+        )
+        
+        displayContext.lineTo(
+            x + r * 0.6 * ( .4 * sin(a) - cos(a)),
+            y + r * 0.6 * ( sin(a) + .4 * cos(a))
+        )
+        displayContext.fill()
+    }
+    
+    function showLeftThrust(){
+        
+        let x = ship.x
+        let y = ship.y
+        let r = ship.r
+        let a = ship.a
+        
+        displayContext.fillStyle = 'red'
+        displayContext.beginPath()
+        displayContext.lineTo(
+            x + r * ( 0.4 * cos(a) - 0.22 * sin(a) ),
+            y - r * ( 0.4 * sin(a) + 0.22 * cos(a) )
+        )
+        displayContext.lineTo(
+            x + r * ( 0.7 * cos(a) - 0.1 * sin(a) ),
+            y - r * ( 0.7 * sin(a) + 0.1 * cos(a) )
+        )
+        displayContext.lineTo(
+            x + r * ( 0.7 * cos(a) - 0.4 * sin(a) ),
+            y - r * ( 0.7 * sin(a) + 0.4 * cos(a) )
+        )
+        displayContext.closePath()
+        displayContext.fill()
+        displayContext.fillStyle = 'yellow'
+        displayContext.beginPath()
+        displayContext.lineTo(
+            x + r * ( 0.45 * cos(a) - 0.2 * sin(a) ),
+            y - r * ( 0.45 * sin(a) + 0.2 * cos(a) )
+        )
+        displayContext.lineTo(
+            x + r * ( 0.65 * cos(a) - 0.13 * sin(a) ),
+            y - r * ( 0.65 * sin(a) + 0.13 * cos(a) )
+        )
+        displayContext.lineTo(
+            x + r * ( 0.67 * cos(a) - 0.35 * sin(a) ),
+            y - r * ( 0.67 * sin(a) + 0.35 * cos(a) )
+        )
+        displayContext.closePath()
+        displayContext.fill()
+    }
+    
+    function showRightThrust(){
+        
+        let x = ship.x
+        let y = ship.y
+        let r = ship.r
+        let a = ship.a
+        
+        displayContext.fillStyle = 'red'
+        displayContext.beginPath()
+        displayContext.lineTo(
+            x + r * ( 0.4 * cos(a) + 0.22 * sin(a) ),
+            y - r * ( 0.4 * sin(a) - 0.22 * cos(a) )
+        )
+        displayContext.lineTo(
+            x + r * ( 0.7 * cos(a) + 0.1 * sin(a) ),
+            y - r * ( 0.7 * sin(a) - 0.1 * cos(a) )
+        )
+        displayContext.lineTo(
+            x + r * ( 0.7 * cos(a) + 0.4 * sin(a) ),
+            y - r * ( 0.7 * sin(a) - 0.4 * cos(a) )
+        )
+        displayContext.closePath()
+        displayContext.fill()
+        displayContext.fillStyle = 'yellow'
+        displayContext.beginPath()
+        displayContext.lineTo(
+            x + r * ( 0.45 * cos(a) + 0.2 * sin(a) ),
+            y - r * ( 0.45 * sin(a) - 0.2 * cos(a) )
+        )
+        displayContext.lineTo(
+            x + r * ( 0.65 * cos(a) + 0.13 * sin(a) ),
+            y - r * ( 0.65 * sin(a) - 0.13 * cos(a) )
+        )
+        displayContext.lineTo(
+            x + r * ( 0.67 * cos(a) + 0.35 * sin(a) ),
+            y - r * ( 0.67 * sin(a) - 0.35 * cos(a) )
+        )
+        displayContext.closePath()
+        displayContext.fill()
+    }
+    
+    function createLaser(){
+        let a = ship.a
+        let x = ship.x
+        let y = ship.y
+        let r = ship.r
+        if( laser.body.length > laser.limit ){
+            return
+        }
+        laser.body.push({
+            x : x + r * cos(a),
+            y : y - r * sin(a),
+            a : a,
+            velocityX : laser.velocity * cos( a ),
+            velocityY : laser.velocity * sin( a ),
+            distant: 0,
+            explodeTime: 0
+        })
+    }
+    
+    function laserShow(){
+        for( let i = 0; i < laser.body.length; i ++ ){
+            if( laser.body[i].explodeTime > 0 ){
+                laser.body[i].explodeTime --
+                displayContext.beginPath()
+                displayContext.fillStyle = 'red'
+                displayContext.arc( laser.body[i].x, laser.body[i].y, 15, 0, 2*pi )
+                displayContext.fill()
+                displayContext.beginPath()
+                displayContext.fillStyle = 'orange'
+                displayContext.arc( laser.body[i].x, laser.body[i].y, 10, 0, 2*pi )
+                displayContext.fill()
+                displayContext.beginPath()
+                displayContext.fillStyle = 'white'
+                displayContext.arc( laser.body[i].x, laser.body[i].y, 5, 0, 2*pi )
+                displayContext.fill()
+                if( laser.body[i].explodeTime == 0 ){
+                    laser.body.splice( i, 1 )
+                }
+                continue
+            }
+            
+            displayContext.beginPath()
+            displayContext.fillStyle = 'red'
+            displayContext.arc(
+                laser.body[i].x,
+                laser.body[i].y,
+                2, 0, 2*pi
+            )
+            displayContext.fill()
+        }
+    }
+    
+    function laserUpdate(){
+        
+        for( let i = 0; i < laser.body.length; i ++ ){
+            
+            let l = laser.body[i]
+            if( l.explodeTime > 0 ){
+                continue
+            }
+            l.x += l.velocityX
+            l.y -= l.velocityY 
+            
+            l.distant += Math.sqrt(Math.pow(l.velocityX, 2) + Math.pow(l.velocityY, 2))
+            
+            if( l.distant > display.height /2 ){
+                laser.body.splice( i, 1 )
+            }
+            for( let j = 0; j < asteroid.body.length; j ++ ){
+                let a = asteroid.body[j] 
+                if( distanBTNObject( l.x, l.y, a.x, a.y ) < a.r ){
+                    asteroidExplod(j)
+                    score ++
+                    laser.body[i].explodeTime = laser.explodeTime
+                }
+                
+            } 
+        }
+    }
+    
+    function createAsteroid(){
+        let asteroidList = []
+        let x, y
+        for( let i = 0; i < asteroid.number + level; i ++ ){
+            do{
+                x = Math.random() * display.width
+                y = Math.random() * display.height
+                
+            }while( 
+                distanBTNObject( x, y, ship.x, ship.y) < 150 ||
+                asteroidCollap( x, y, asteroidList )
+            )
+            asteroidList.push({ x, y })
+            asteroid.body.push( new Asteroid( x, y, asteroid.r ))   
+        }
+    }
+    
+    function asteroidShow(){
+        
+        for( let i = 0; i < asteroid.body.length; i ++ ){
+            
+            let a = asteroid.body[i]
+            if( devMode ){
+                displayContext.beginPath()
+                displayContext.strokeStyle = 'green'
+                displayContext.arc( a.x, a.y, a.r, 0, 2*pi )
+                displayContext.stroke()
+            }
+            displayContext.strokeStyle = 'gray'
+            displayContext.beginPath()
+            for( let j = 0; j < a.vertex; j ++ ){
+                displayContext.lineTo(
+                    a.x + a.r * a.offset[j] * cos( - j * 2*pi/a.vertex ),
+                    a.y - a.r * a.offset[j] * sin( - j * 2*pi/a.vertex )
+                )
+            }
+            displayContext.closePath()
+            displayContext.stroke()
+        }
+        
+        
+    }
+    
+    function Asteroid( x, y, r ){
+        this.x = x
+        this.y = y
+        this.vertex = Math.floor( Math.random() * 5 ) + 6
+        this.r = r
+        this.offset = []
+        this.velocityX = ( Math.random() * asteroid.velocity + 0.5 ) * (Math.random() < 0.5 ? 1 : -1)
+        this.velocityY = ( Math.random() * asteroid.velocity + 0.5 ) * (Math.random() < 0.5 ? 1 : -1)
+        for( let i = 0; i < this.vertex; i ++ ){
+            this.offset.push( ( Math.floor( Math.random() * 4 ) + 6 ) / 10 )
+        }
+    }
+            
+    function asteroidCollap( x, y, list ){
+        if( list.length < 1 ){
+            return false
+        } else {
+            let result = false
+            for( let i = 0; i < list.length; i ++ ){
+                if( distanBTNObject( x, y, list[i].x, list[i].y ) < 2 * asteroid.r ){
+                    result = true
+                    break
+                }
+            }
+
+            return result            
+        }
+    
+    }
+    
+    function asteroidUpdate(){
+        for( let i = 0; i < asteroid.body.length; i ++ ){
+            let a = asteroid.body[i]
+            
+            
+            // impact border
+            if( a.x - a.r > display.width ){
+                a.x = -a.r
+            }
+            if( a.x + a.r < 0){
+                a.x = display.width + a.r
+            }
+            if( a.y + a.r < 0 ){
+                a.y = display.height + a.r
+            }
+            if( a.y - a.r > display.height ){
+                a.y = -a.r
+            }
+            
+            a.x += a.velocityX
+            a.y += a.velocityY
+            
+            if( distanBTNObject( ship.x, ship.y, a.x, a.y ) < ship.r + a.r &&           ship.blinkTime <= 0 && lives != 0 ){
+                asteroidExplod(i)
+                lives --
+                if( lives == 0 ){
+                    message = 'Game Over'
+                    messageAlpha = 1
+                    gameStatus = 'over'
+                } else {
+                    ship = createShip()
+                }
+            }
+            
+            if( lives == 0 && messageAlpha < 0 ){
+                newGame()
+            }
+            
+            
+            //impact with another asteroid
+//            for( let j = 0; j < asteroid.body.length; j ++ ){
+//                if( i == j ){
+//                    continue
+//                }
+//                let b = asteroid.body[j]
+//                let d = distanBTNObject( a.x, a.y, b.x, b.y )
+//                if( d < a.r + b.r && d > a.r + b.r - 20
+//                    
+//                  ){
+//                    if( Math.sign( a.velocityX) != Math.sign( b.velocityX ) && 
+//                        Math.sign( a.velocityY) != Math.sign( b.velocityY )
+//                      ){
+//                        console.log('x dif y dif');
+//                        a.velocityX *= -1
+//                        a.velocityY *= -1
+//                    } else if ( 
+//                        Math.sign( a.velocityX) != Math.sign( b.velocityX ) && 
+//                        Math.sign( a.velocityY) == Math.sign( b.velocityY )
+//                      ){
+//                        console.log('x dif y same');
+//                        a.velocityX *= -1
+//                    } else if (
+//                        Math.sign( a.velocityX) == Math.sign( b.velocityX ) && 
+//                        Math.sign( a.velocityY) != Math.sign( b.velocityY )
+//                      ){
+//                        console.log('x same y dif');
+//                        a.velocityY *= -1
+//                    } else {
+//                        console.log('same same');
+//                        a.velocityX *= -1
+//                        a.velocityY *= -1
+//                        
+//                    }
+//                    
+//                    
+//                    
+//                }
+//                
+//            }
+        }
+    }  
+    
+    function asteroidExplod(j){
+        let a = asteroid.body[j]
+        if( a.r == asteroid.r ){
+            asteroid.body.push( new Asteroid( a.x, a.y, asteroid.r /2 ))
+            asteroid.body.push( new Asteroid( a.x, a.y, asteroid.r /2 ))
+        } else if( a.r == asteroid.r/2 ){
+            asteroid.body.push( new Asteroid( a.x, a.y, asteroid.r /4 ))
+            asteroid.body.push( new Asteroid( a.x, a.y, asteroid.r /4 ))
+        }
+        asteroid.body.splice( j, 1)
+        if( asteroid.body.length == 0 ){
+            level ++
+            newLevel()
+        }
+    }
+    
+    function messageShow(){
+        displayContext.fillStyle = 'rgba( 255,255,255,' + messageAlpha + ')'
+        displayContext.textAlign = 'center'
+        displayContext.font = messageFont
+        displayContext.fillText( message, display.width * 0.5, display.height * 0.75 )
+        
+        messageAlpha -= 1/180
+        
+    }
+    
+    function livesShow(){
+        displayContext.fillStyle = 'green'
+        let x = 400
+        let y = 30
+        let a = 2*pi
+        let r = 13
+        for( let i = 0; i < lives; i ++ ){
+            displayContext.beginPath()
+            displayContext.lineTo(
+                x - ( i - 3 ) * 27,
+                y - r
+            )
+            displayContext.lineTo(
+                x - ( i - 3 ) * 27 - r * 0.9,
+                y + r
+            )
+            displayContext.lineTo(
+                x - ( i - 3 ) * 27 + r * 0.9,
+                y + r
+            )
+            displayContext.closePath()
+            displayContext.fill()
+        }
+        
+    }
+    
+    function scoreShow(){
+        displayContext.fillStyle = 'gray'
+        displayContext.textAlign = 'start'
+        displayContext.font = '20px Verdana'
+        displayContext.fillText( 'Score : ' + score , 10, 40)
+    }
+    
+    //////////////////// common area
+    
+    function distanBTNObject( x, y, a, b ){
+        return Math.sqrt( Math.pow( x - a , 2) + Math.pow( y - b, 2 ))
+    }
+    
+    document.addEventListener('keydown', function( event ){
+        if( lives <= 0 ){
+            return
+        }
+        if( event.keyCode == 37 ){
+            ship.rotateLeft = true
+            ship.rotateRight = false
+        }
+        if( event.keyCode == 39 ){
+            ship.rotateRight = true
+            ship.rotateLeft = false
+        }
+        if( event.keyCode == 38 ){
+            ship.thrust = true
+        }
+        if( event.keyCode == 32 ){
+            createLaser()
+        }
+        
+    })
+    
+    document.addEventListener('keyup', function( event ){
+        if( lives <= 0 ){
+            return
+        }
+        if( event.keyCode == 37 ){
+            ship.rotateLeft = false
+        }
+        if( event.keyCode == 39 ){
+            ship.rotateRight = false
+        }
+        if( event.keyCode == 38 ){
+            ship.move = false
+        }
+        if( event.keyCode == 38 ){
+            ship.thrust = false
+        }
+    })
+
+</script>
